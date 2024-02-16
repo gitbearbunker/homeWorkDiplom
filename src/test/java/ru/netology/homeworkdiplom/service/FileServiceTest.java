@@ -1,76 +1,129 @@
 package ru.netology.homeworkdiplom.service;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import ru.netology.homeworkdiplom.dto.FileDescriptionInResponse;
+import ru.netology.homeworkdiplom.dto.FileDto;
 import ru.netology.homeworkdiplom.entity.FileEntity;
+import ru.netology.homeworkdiplom.entity.UserEntity;
+import ru.netology.homeworkdiplom.model.FileBody;
 import ru.netology.homeworkdiplom.repository.FileRepository;
+import ru.netology.homeworkdiplom.security.JWTToken;
+import org.junit.jupiter.api.Assertions;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.Mockito;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
 
-import static org.mockito.Mockito.when;
+@ExtendWith(SpringExtension.class)
+@SpringBootTest
+public class FileServiceTest {
 
-class FileServiceTest {
-    public static final String EXISTING_FILE = "existingFile";
-    public static final String NOT_EXISTING_FILE = "notExistingFile";
+    private static final String MY_FILE_NAME = "fileName.txt";
+    @Autowired
+    private FileService fileService;
+    @MockBean
+    private FileRepository fileRepository;
+    @MockBean
+    private JWTToken jwtToken;
+    private UserEntity user;
+    private FileEntity file;
 
-    private final FileEntity existingFileEntity = new FileEntity(EXISTING_FILE, new byte[]{0, 1, 2});
-
-    private final FileRepository fileRepository = createFileRepositoryMock();
-    private final FileService fileService = new FileService(fileRepository);
-
-    private FileRepository createFileRepositoryMock() {
-        final FileRepository fileRepository = Mockito.mock(FileRepository.class);
-
-        when(fileRepository.findById(EXISTING_FILE)).thenReturn(Optional.of(existingFileEntity));
-        when(fileRepository.findById(NOT_EXISTING_FILE)).thenReturn(Optional.empty());
-
-        when(fileRepository.existsById(EXISTING_FILE)).thenReturn(true);
-        when(fileRepository.existsById(NOT_EXISTING_FILE)).thenReturn(false);
-
-        when(fileRepository.getFiles(1)).thenReturn(List.of(existingFileEntity));
-
-        return fileRepository;
+    @BeforeEach
+    public void init() {
+        user = UserEntity.builder().id(1L).build();
+        file = FileEntity.builder()
+                .id(10L)
+                .fileName(MY_FILE_NAME)
+                .hash("856bc192834da78ac51d23be0d55a786")
+                .fileType(MediaType.TEXT_PLAIN_VALUE)
+                .size(13L)
+                .fileData("Cloud_storage".getBytes())
+                .userEntity(user)
+                .build();
     }
 
     @Test
-    void getFile() {
-        final byte[] expectedFile = new byte[]{0, 1, 2};
-        final byte[] file = fileService.getFile(EXISTING_FILE);
-        Assertions.assertArrayEquals(expectedFile, file);
+    void test_addFile() throws IOException {
+        String hash = "856bc192834da78ac51d23be0d55a786";
+        MultipartFile multipartFile =
+                new MockMultipartFile("file", MY_FILE_NAME,
+                        MediaType.TEXT_PLAIN_VALUE, "Cloud_storage".getBytes());
+        Mockito.when(jwtToken.getAuthenticatedUser()).thenReturn(user);
+        Mockito.when(fileRepository.findFileByUserEntityIdAndFileName(1L, MY_FILE_NAME))
+                .thenReturn(Optional.empty());
+        Mockito.when(fileRepository.findFileByUserEntityIdAndHash(1L, hash))
+                .thenReturn(Optional.empty());
+        FileEntity createdFile = FileEntity.builder()
+                .id(10L)
+                .hash(hash)
+                .fileName(MY_FILE_NAME)
+                .fileType(multipartFile.getContentType())
+                .size(multipartFile.getSize())
+                .fileData(multipartFile.getBytes())
+                .userEntity(UserEntity.builder().id(1L).build())
+                .build();
+
+        fileService.addFile(multipartFile, MY_FILE_NAME);
+
+        Assertions.assertEquals(13L, createdFile.getSize());
     }
 
     @Test
-    void getFile_failed() {
-        Assertions.assertThrows(RuntimeException.class, () -> fileService.getFile(NOT_EXISTING_FILE));
+    void test_getFile() {
+
+        Mockito.when(jwtToken.getAuthenticatedUser()).thenReturn(user);
+        Mockito.when(fileRepository.findFileByUserEntityIdAndFileName(1L, MY_FILE_NAME))
+                .thenReturn(Optional.ofNullable(file));
+
+        FileDto downloadFile = fileService.getFile(MY_FILE_NAME);
+
+        Assertions.assertEquals(MY_FILE_NAME, downloadFile.getFileName());
     }
 
     @Test
-    void deleteFile() {
-        Assertions.assertDoesNotThrow(() -> fileService.deleteFile(EXISTING_FILE));
+    void test_renameFile() {
+        FileBody newName = new FileBody("newFileName.txt");
+        Mockito.when(jwtToken.getAuthenticatedUser()).thenReturn(user);
+        Mockito.when(fileRepository.findFileByUserEntityIdAndFileName(1L, MY_FILE_NAME))
+                .thenReturn(Optional.ofNullable(file));
+
+        fileService.renameFile(MY_FILE_NAME, newName);
+
+        Mockito.verify(fileRepository, Mockito.times(1)).save(file);
     }
 
     @Test
-    void deleteFile_failed() {
-        Assertions.assertThrows(RuntimeException.class, () -> fileService.deleteFile(NOT_EXISTING_FILE));
+    void test_deleteFile() {
+        Mockito.when(jwtToken.getAuthenticatedUser()).thenReturn(user);
+        Mockito.when(fileRepository.findFileByUserEntityIdAndFileName(1L, MY_FILE_NAME))
+                .thenReturn(Optional.ofNullable(file));
+
+        fileService.deleteFile(MY_FILE_NAME);
+
+        Mockito.verify(fileRepository, Mockito.times(1)).deleteById(file.getId());
     }
 
     @Test
-    void editFileName() {
-        Assertions.assertDoesNotThrow(() -> fileService.editFileName(EXISTING_FILE, NOT_EXISTING_FILE));
-    }
+    void test_getAllFiles() {
+        int limit = 3;
+        List<FileEntity> listFile = List.of(
+                FileEntity.builder().size(1111L).fileName("file1.txt").build(),
+                FileEntity.builder().size(2222L).fileName("file2.txt").build(),
+                FileEntity.builder().size(3333L).fileName("file3.txt").build());
+        Mockito.when(jwtToken.getAuthenticatedUser()).thenReturn(user);
+        Mockito.when(fileRepository.findFilesByUserIdWithLimit(user.getId(), limit)).thenReturn(listFile);
 
-    @Test
-    void editFileName_failed() {
-        Assertions.assertThrows(RuntimeException.class, () -> fileService.editFileName(NOT_EXISTING_FILE, EXISTING_FILE));
-    }
+        List<FileDto> files = fileService.getAllFiles(limit);
 
-    @Test
-    void getFileList() {
-        final List<FileDescriptionInResponse> expectedFileList = List.of(new FileDescriptionInResponse(EXISTING_FILE, 3));
-        final List<FileDescriptionInResponse> fileList = fileService.getFileList(1);
-        Assertions.assertEquals(expectedFileList, fileList);
+        Assertions.assertEquals("file1.txt", files.get(0).getFileName());
     }
 }

@@ -1,17 +1,15 @@
 package ru.netology.homeworkdiplom.config;
 
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.servlet.config.annotation.*;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
-@EnableWebMvc
-public class WebConfig implements WebMvcConfigurer {
+public class WebConfig {
 
-    @Override
-    public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/**")
-                .allowCredentials(true)
-                .allowedOrigins("http://localhost:8080")
-                .allowedMethods("*");
+    @Bean
+    public PasswordEncoder bCryptPasswordEncoder() {
+        return new BCryptPasswordEncoder(12);
     }
 }

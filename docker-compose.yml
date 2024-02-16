@@ -1,22 +1,41 @@
-version: '3.7'
-
+version: "3.9"
 services:
+
+  database:
+    container_name: database-server
+    image: mysql:latest
+    volumes:
+      - /mysql_data:/var/lib/mysql
+    environment:
+      MYSQL_USERNAME: root
+      MYSQL_PASSWORD: root
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: mysqlDataBase
+    ports:
+      - "3306:3306"
+
   server:
+    container_name: backend-server
     build: ./
-    container_name: postgres-server
+    image: app-cloud-storage-back:latest
     environment:
-      spring.datasource.url: jdbc:postgresql://db:5432/postgres
-      spring.jpa.hibernate.ddl-auto: create-drop
+      spring_datasource_url: jdbc:mysql://database:3306/mysqlDataBase
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: root
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_LIQUIBASE_URL: jdbc:mysql://database:3306/mysqlDataBase
+      SPRING_LIQUIBASE_USER: root
+      SPRING_LIQUIBASE_PASSWORD: root
     ports:
-      - "8090:8090"
+      - "8888:8888"
     depends_on:
-      - db
-  db:
-    image: postgres
-    container_name: db
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: postgres
+      - database
+
+  client:
+    container_name: frontend-client
+    build:
+      context: cloud_storage-frontend
+      dockerfile: Dockerfile
+    image: cloud-storage-front:latest
     ports:
-      - "5432:5432"
+      - "8080:8080"

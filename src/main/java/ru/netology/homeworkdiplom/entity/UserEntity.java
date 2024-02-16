@@ -1,15 +1,35 @@
 package ru.netology.homeworkdiplom.entity;
 
-import lombok.*;
-import javax.persistence.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+import ru.netology.homeworkdiplom.enums.Role;
 
-@Entity
-@Table(name = "users")
+import javax.persistence.*;
+import java.util.List;
+import java.util.Set;
+
 @Data
-@NoArgsConstructor
 @AllArgsConstructor
+@NoArgsConstructor
+@Builder
+@Entity
 public class UserEntity {
+
     @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
     private String login;
+
     private String password;
+
+    private String role;
+
+    @ElementCollection
+    private Set<Role> roles;
+
+    @OneToMany(mappedBy = "userEntity", cascade = CascadeType.ALL)
+    private List<FileEntity> fileList;
 }
